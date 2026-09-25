@@ -16,6 +16,8 @@ export interface IProject {
 }
 
 export interface IConditionRule {
+  _id?: string;
+  name?: string;
   field: string;
   operator: 'equals' | 'contains' | 'startsWith' | 'endsWith';
   value: string;
@@ -26,8 +28,11 @@ export interface IConditionRule {
 export interface IMockAPI {
   _id?: string;
   projectId: string;
+  name?: string;
   path: string;
   method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
+  priority: number;
+  enabled: boolean;
   statusCode: number;
   responseBody: string;
   responseHeaders: Record<string, string>;
@@ -36,10 +41,20 @@ export interface IMockAPI {
   createdAt?: Date;
 }
 
+export type MatchSource = 'default' | 'condition' | 'none';
+
 export interface IRequestLog {
   _id?: string;
   projectId: string;
   apiId?: string;
+  apiName?: string;
+  apiPath?: string;
+  apiMethod?: string;
+  matched: boolean;
+  matchSource: MatchSource;
+  matchedRuleId?: string;
+  matchedRuleName?: string;
+  priority?: number;
   method: string;
   path: string;
   headers: Record<string, string>;

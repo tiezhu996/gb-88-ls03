@@ -9,9 +9,41 @@
     </div>
 
     <a-card :loading="projectStore.loading">
-      <a-table :data="projectStore.apis" :pagination="false">
+      <a-table
+        :data="projectStore.apis"
+        :pagination="false"
+        :row-class="getRowClass"
+        :scroll="{ x: 1100 }"
+      >
         <template #columns>
-          <a-table-column title="方法" data-index="method" width="100">
+          <a-table-column title="启用" data-index="enabled" width="70">
+            <template #cell="{ record }">
+              <a-switch
+                :model-value="record.enabled"
+                :loading="togglingId === record._id"
+                @change="(value: boolean) => handleToggleEnabled(record, value)"
+              />
+            </template>
+          </a-table-column>
+          <a-table-column title="优先级" data-index="priority" width="110">
+            <template #cell="{ record }">
+              <a-input-number
+                :model-value="record.priority"
+                :min="-999999"
+                :max="999999"
+                size="small"
+                style="width: 80px"
+                @change="(value: number | undefined) => handlePriorityChange(record, value)"
+              />
+            </template>
+          </a-table-column>
+          <a-table-column title="名称" data-index="name" width="150">
+            <template #cell="{ record }">
+              <span v-if="record.name">{{ record.name }}</span>
+              <span v-else class="text-muted">未命名</span>
+            </template>
+          </a-table-column>
+          <a-table-column title="方法" data-index="method" width="90">
             <template #cell="{ record }">
               <a-tag :color="getMethodColor(record.method)">{{ record.method }}</a-tag>
             </template>
@@ -19,19 +51,20 @@
           <a-table-column title="路径" data-index="path">
             <template #cell="{ record }">
               <code>{{ record.path }}</code>
+              <a-tag v-if="!record.enabled" color="gray" size="small" class="disabled-tag">已停用</a-tag>
             </template>
           </a-table-column>
-          <a-table-column title="状态码" data-index="statusCode" width="100">
+          <a-table-column title="状态码" data-index="statusCode" width="90">
             <template #cell="{ record }">
               <a-tag>{{ record.statusCode }}</a-tag>
             </template>
           </a-table-column>
-          <a-table-column title="延迟" data-index="delay" width="80">
+          <a-table-column title="延迟" data-index="delay" width="90">
             <template #cell="{ record }">
               {{ record.delay || 0 }}ms
             </template>
           </a-table-column>
-          <a-table-column title="Mock URL" width="250">
+          <a-table-column title="Mock URL" width="220">
             <template #cell="{ record }">
               <div class="url-container">
                 <code class="mock-url">{{ getMockUrl(record) }}</code>
@@ -41,7 +74,7 @@
               </div>
             </template>
           </a-table-column>
-          <a-table-column title="操作" width="150">
+          <a-table-column title="操作" width="130">
             <template #cell="{ record }">
               <a-space>
                 <a-button type="text" size="small" @click="handleEdit(record)">
@@ -58,6 +91,9 @@
           <a-empty description="暂无 API，点击右上角新建 API" />
         </template>
       </a-table>
+      <p class="table-tip">
+        同一路径可配置多份 Mock：优先级数字越大越先命中，数字相同按创建时间早的先命中；停用的接口不参与匹配。
+      </p>
     </a-card>
 
     <a-modal
@@ -79,18 +115,35 @@
               </a-select>
             </a-form-item>
           </a-col>
+          <a-col :span="6">
+            <a-form-item field="priority" label="优先级">
+              <a-input-number v-model="apiForm.priority" :min="-999999" :max="999999" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="6">
+            <a-form-item field="enabled" label="启用">
+              <a-switch v-model="apiForm.enabled" />
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <a-form-item field="name" label="接口名称（用于日志展示命中来源）">
+          <a-input v-model="apiForm.name" placeholder="例如：固定数据 / 管理员角色数据" />
+        </a-form-item>
+        <a-form-item field="path" label="API 路径">
+          <a-input v-model="apiForm.path" placeholder="/api/users/:id" />
+        </a-form-item>
+        <a-row :gutter="16">
           <a-col :span="12">
             <a-form-item field="statusCode" label="响应状态码">
               <a-input-number v-model="apiForm.statusCode" :min="100" :max="599" style="width: 100%" />
             </a-form-item>
           </a-col>
+          <a-col :span="12">
+            <a-form-item field="delay" label="响应延迟 (毫秒)">
+              <a-input-number v-model="apiForm.delay" :min="0" style="width: 100%" />
+            </a-form-item>
+          </a-col>
         </a-row>
-        <a-form-item field="path" label="API 路径">
-          <a-input v-model="apiForm.path" placeholder="/api/users/:id" />
-        </a-form-item>
-        <a-form-item field="delay" label="响应延迟 (毫秒)">
-          <a-input-number v-model="apiForm.delay" :min="0" style="width: 200px" />
-        </a-form-item>
         <a-form-item field="responseBody" label="响应体 (JSON)">
           <MonacoEditor v-model="apiForm.responseBody" language="json" />
         </a-form-item>
@@ -99,10 +152,13 @@
             <div class="conditions-section">
               <a-button type="outline" size="small" @click="addCondition">
                 <template #icon><icon-plus /></template>
-                添加条件
+                添加规则
               </a-button>
               <div v-for="(condition, index) in apiForm.conditions" :key="index" class="condition-item">
                 <a-row :gutter="8" align="middle">
+                  <a-col :span="8">
+                    <a-input v-model="condition.name" placeholder="规则名称（如：管理员角色）" />
+                  </a-col>
                   <a-col :span="5">
                     <a-input v-model="condition.field" placeholder="字段名" />
                   </a-col>
@@ -114,19 +170,21 @@
                       <a-option value="endsWith">结尾</a-option>
                     </a-select>
                   </a-col>
-                  <a-col :span="5">
-                    <a-input v-model="condition.value" placeholder="匹配值" />
-                  </a-col>
-                  <a-col :span="3">
-                    <a-input-number v-model="condition.statusCode" :min="100" :max="599" style="width: 100%" />
-                  </a-col>
                   <a-col :span="6">
-                    <a-input v-model="condition.responseBody" placeholder="响应体" />
+                    <a-input v-model="condition.value" placeholder="匹配值" />
                   </a-col>
                   <a-col :span="1">
                     <a-button type="text" status="danger" @click="removeCondition(index)">
                       <icon-delete />
                     </a-button>
+                  </a-col>
+                </a-row>
+                <a-row :gutter="8" align="middle" class="condition-response">
+                  <a-col :span="3">
+                    <a-input-number v-model="condition.statusCode" :min="100" :max="599" style="width: 100%" />
+                  </a-col>
+                  <a-col :span="21">
+                    <a-input v-model="condition.responseBody" placeholder="命中该规则时返回的响应体 (JSON)" />
                   </a-col>
                 </a-row>
               </div>
@@ -144,7 +202,7 @@ import { useRoute } from 'vue-router';
 import { Message, Modal } from '@arco-design/web-vue';
 import { IconPlus, IconCopy, IconDelete } from '@arco-design/web-vue/es/icon';
 import { useProjectStore } from '../store';
-import type { MockAPI } from '../types';
+import type { MockAPI, ConditionRule } from '../types';
 import MonacoEditor from '../components/MonacoEditor.vue';
 
 const route = useRoute();
@@ -152,13 +210,17 @@ const projectStore = useProjectStore();
 
 const showCreateModal = ref(false);
 const editingAPI = ref<MockAPI | null>(null);
+const togglingId = ref<string | null>(null);
 const apiForm = ref({
+  name: '',
   method: 'GET',
   path: '',
+  priority: 0,
+  enabled: true,
   statusCode: 200,
   responseBody: '{}',
   delay: 0,
-  conditions: [] as any[]
+  conditions: [] as ConditionRule[]
 });
 
 const projectId = computed(() => route.params.projectId as string);
@@ -174,6 +236,10 @@ function getMethodColor(method: string) {
   return colors[method] || 'gray';
 }
 
+function getRowClass(record: MockAPI) {
+  return record.enabled ? '' : 'api-row-disabled';
+}
+
 function getMockUrl(api: MockAPI) {
   return `/mock/${projectId.value}${api.path}`;
 }
@@ -186,12 +252,15 @@ function copyUrl(url: string) {
 function handleEdit(api: MockAPI) {
   editingAPI.value = api;
   apiForm.value = {
+    name: api.name || '',
     method: api.method,
     path: api.path,
+    priority: api.priority ?? 0,
+    enabled: api.enabled ?? true,
     statusCode: api.statusCode,
     responseBody: api.responseBody,
     delay: api.delay,
-    conditions: [...api.conditions]
+    conditions: api.conditions.map((c) => ({ ...c }))
   };
   showCreateModal.value = true;
 }
@@ -221,6 +290,33 @@ async function handleSave() {
   }
 }
 
+async function handleToggleEnabled(api: MockAPI, enabled: boolean) {
+  togglingId.value = api._id;
+  try {
+    const result = await projectStore.toggleAPIEnabled(projectId.value, api._id, enabled);
+    if (result.success) {
+      Message.success(enabled ? `已启用「${api.name || api.path}」` : `已停用「${api.name || api.path}」`);
+    }
+  } catch (error: any) {
+    Message.error(error.response?.data?.error || '操作失败');
+  } finally {
+    togglingId.value = null;
+  }
+}
+
+async function handlePriorityChange(api: MockAPI, value: number | undefined) {
+  const priority = typeof value === 'number' ? value : 0;
+  if (priority === api.priority) return;
+  try {
+    const result = await projectStore.setAPIPriority(projectId.value, api._id, priority);
+    if (result.success) {
+      Message.success(`「${api.name || api.path}」优先级已设为 ${priority}`);
+    }
+  } catch (error: any) {
+    Message.error(error.response?.data?.error || '优先级更新失败');
+  }
+}
+
 function handleDelete(api: MockAPI) {
   Modal.confirm({
     title: '确认删除',
@@ -240,6 +336,7 @@ function handleDelete(api: MockAPI) {
 
 function addCondition() {
   apiForm.value.conditions.push({
+    name: '',
     field: '',
     operator: 'equals',
     value: '',
@@ -255,8 +352,11 @@ function removeCondition(index: number) {
 function resetForm() {
   editingAPI.value = null;
   apiForm.value = {
+    name: '',
     method: 'GET',
     path: '',
+    priority: 0,
+    enabled: true,
     statusCode: 200,
     responseBody: '{}',
     delay: 0,
@@ -295,6 +395,20 @@ onMounted(() => {
   font-size: 12px;
 }
 
+.disabled-tag {
+  margin-left: 6px;
+}
+
+.text-muted {
+  color: #86909c;
+}
+
+.table-tip {
+  margin: 12px 0 0;
+  font-size: 12px;
+  color: #86909c;
+}
+
 .conditions-section {
   display: flex;
   flex-direction: column;
@@ -305,5 +419,13 @@ onMounted(() => {
   padding: 12px;
   background: #f7f8fa;
   border-radius: 4px;
+}
+
+.condition-response {
+  margin-top: 8px;
+}
+
+:deep(.api-row-disabled) td {
+  opacity: 0.55;
 }
 </style>

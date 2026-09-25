@@ -115,7 +115,7 @@ export const useProjectStore = defineStore('project', {
     async createAPI(projectId: string, data: Partial<MockAPI>) {
       const response = await mockApiApi.createAPI(projectId, data);
       if (response.data.success) {
-        this.apis.unshift(response.data.data!);
+        await this.fetchAPIs(projectId);
       }
       return response.data;
     },
@@ -123,10 +123,25 @@ export const useProjectStore = defineStore('project', {
     async updateAPI(projectId: string, id: string, data: Partial<MockAPI>) {
       const response = await mockApiApi.updateAPI(projectId, id, data);
       if (response.data.success) {
-        const index = this.apis.findIndex((a) => a._id === id);
-        if (index !== -1) {
-          this.apis[index] = response.data.data!;
-        }
+        await this.fetchAPIs(projectId);
+      }
+      return response.data;
+    },
+
+    // 列表上直接切换启用状态；停用后不参与匹配
+    async toggleAPIEnabled(projectId: string, id: string, enabled: boolean) {
+      const response = await mockApiApi.patchAPI(projectId, id, { enabled });
+      if (response.data.success) {
+        await this.fetchAPIs(projectId);
+      }
+      return response.data;
+    },
+
+    // 列表上直接调整优先级；数字越大越先命中
+    async setAPIPriority(projectId: string, id: string, priority: number) {
+      const response = await mockApiApi.patchAPI(projectId, id, { priority });
+      if (response.data.success) {
+        await this.fetchAPIs(projectId);
       }
       return response.data;
     },

@@ -14,6 +14,8 @@ export interface Project {
 }
 
 export interface ConditionRule {
+  _id?: string;
+  name?: string;
   field: string;
   operator: string;
   value: string;
@@ -24,8 +26,11 @@ export interface ConditionRule {
 export interface MockAPI {
   _id: string;
   projectId: string;
+  name?: string;
   path: string;
   method: string;
+  priority: number;
+  enabled: boolean;
   statusCode: number;
   responseBody: string;
   responseHeaders: Record<string, string>;
@@ -34,10 +39,20 @@ export interface MockAPI {
   createdAt: string;
 }
 
+export type MatchSource = 'default' | 'condition' | 'none';
+
 export interface RequestLog {
   _id: string;
   projectId: string;
   apiId?: string;
+  apiName?: string;
+  apiPath?: string;
+  apiMethod?: string;
+  priority?: number;
+  matched: boolean;
+  matchSource: MatchSource;
+  matchedRuleId?: string;
+  matchedRuleName?: string;
   method: string;
   path: string;
   headers: Record<string, string>;

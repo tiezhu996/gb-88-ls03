@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import MockAPI from '../models/MockAPI';
 import RequestLog from '../models/RequestLog';
 import { parseFakerTemplate, checkCondition } from '../utils/fakerParser';
+import { MatchSource, IConditionRule } from '../types';
 
 function matchPath(apiPath: string, requestPath: string): boolean {
   const apiParts = apiPath.split('/');
@@ -37,8 +38,10 @@ export async function mockEngine(req: Request, res: Response, next: NextFunction
   const method = req.method;
 
   try {
-    const apis = await MockAPI.find({ projectId, method });
-    
+    // 停用的接口不参与匹配；优先级大的先命中，相同优先级按创建时间早的先命中
+    const apis = await MockAPI.find({ projectId, method, enabled: true })
+      .sort({ priority: -1, createdAt: 1 });
+
     let matchedApi = null;
     for (const api of apis) {
       if (matchPath(api.path, requestPath)) {
@@ -51,8 +54,13 @@ export async function mockEngine(req: Request, res: Response, next: NextFunction
     let statusCode = 404;
     let headers: Record<string, string> = {};
     let delay = 0;
+    let matched = false;
+    let matchSource: MatchSource = 'none';
+    let matchedRuleId: string | undefined;
+    let matchedRuleName: string | undefined;
 
     if (matchedApi) {
+      matched = true;
       statusCode = matchedApi.statusCode;
       const rawHeaders = matchedApi.responseHeaders;
       headers = rawHeaders instanceof Map
@@ -60,20 +68,44 @@ export async function mockEngine(req: Request, res: Response, next: NextFunction
         : { ...(rawHeaders as Record<string, string> | undefined) };
       delay = matchedApi.delay || 0;
 
-      let matchedCondition = null;
-      for (const condition of matchedApi.conditions) {
-        if (checkCondition(condition, req.query as Record<string, string>, req.body, req.headers as Record<string, string>)) {
+      let matchedCondition: IConditionRule | null = null;
+      let matchedConditionIndex = -1;
+      for (let index = 0; index < matchedApi.conditions.length; index++) {
+        const condition = matchedApi.conditions[index] as IConditionRule;
+        if (
+          checkCondition(condition, req.query as Record<string, string>, req.body, req.headers as Record<string, string>)
+        ) {
           matchedCondition = condition;
+          matchedConditionIndex = index;
           break;
         }
       }
 
       if (matchedCondition) {
+        matchSource = 'condition';
+        matchedRuleId = matchedCondition._id?.toString();
+        matchedRuleName = matchedCondition.name || `规则 ${matchedConditionIndex + 1}`;
         responseBody = parseFakerTemplate(matchedCondition.responseBody);
         statusCode = matchedCondition.statusCode;
       } else {
+        matchSource = 'default';
         responseBody = matchedApi.responseBody ? parseFakerTemplate(matchedApi.responseBody) : {};
       }
+
+      const apiLabel = matchedApi.name
+        ? `${matchedApi.name}(${matchedApi.method} ${matchedApi.path})`
+        : `${matchedApi.method} ${matchedApi.path}`;
+      if (matchSource === 'condition') {
+        console.log(
+          `[Mock] ${method} ${requestPath} 命中接口「${apiLabel}」优先级=${matchedApi.priority}，命中规则「${matchedRuleName}」`
+        );
+      } else {
+        console.log(
+          `[Mock] ${method} ${requestPath} 命中接口「${apiLabel}」优先级=${matchedApi.priority}，使用默认响应`
+        );
+      }
+    } else {
+      console.log(`[Mock] ${method} ${requestPath} 未命中任何启用的接口`);
     }
 
     setTimeout(async () => {
@@ -85,6 +117,14 @@ export async function mockEngine(req: Request, res: Response, next: NextFunction
         await RequestLog.create({
           projectId,
           apiId: matchedApi?._id,
+          apiName: matchedApi?.name || '',
+          apiPath: matchedApi?.path,
+          apiMethod: matchedApi?.method,
+          priority: matchedApi?.priority,
+          matched,
+          matchSource,
+          matchedRuleId,
+          matchedRuleName,
           method,
           path: requestPath,
           headers: req.headers,

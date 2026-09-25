@@ -27,15 +27,37 @@
                 {{ log.method }}
               </a-tag>
               <code class="log-path">{{ log.path }}</code>
+              <a-tag :color="getMatchColor(log)" size="small">
+                {{ getMatchLabel(log) }}
+              </a-tag>
               <a-tag :color="getStatusCodeColor(log.responseStatus)" size="small">
                 {{ log.responseStatus }}
               </a-tag>
               <span class="log-time">{{ formatDate(log.createdAt) }}</span>
             </div>
+            <div v-if="log.matched" class="log-match">
+              <icon-check-circle class="match-icon match-hit" />
+              命中接口：<strong>{{ formatApiLabel(log) }}</strong>
+              <span class="match-priority">优先级 {{ log.priority ?? 0 }}</span>
+              <template v-if="log.matchSource === 'condition'">
+                ，命中规则：<a-tag color="arcoblue" size="small">{{ log.matchedRuleName || '未命名规则' }}</a-tag>
+              </template>
+              <template v-else>
+                ，使用<span class="match-source">默认响应</span>
+              </template>
+            </div>
+            <div v-else class="log-match log-miss">
+              <icon-exclamation-circle class="match-icon" />
+              未命中任何启用的接口（停用接口不参与匹配）
+            </div>
             <a-collapse bordered>
               <a-collapse-panel header="请求详情">
                 <a-row :gutter="16">
                   <a-col :span="12">
+                    <div class="log-section">
+                      <h4>命中来源</h4>
+                      <pre class="log-json">{{ formatJson(getMatchDetail(log)) }}</pre>
+                    </div>
                     <div class="log-section">
                       <h4>请求头</h4>
                       <pre class="log-json">{{ formatJson(log.headers) }}</pre>
@@ -70,8 +92,9 @@
 import { computed, onMounted } from 'vue';
 import { useRoute } from 'vue-router';
 import { Message, Modal } from '@arco-design/web-vue';
-import { IconRefresh, IconDelete } from '@arco-design/web-vue/es/icon';
+import { IconRefresh, IconDelete, IconCheckCircle, IconExclamationCircle } from '@arco-design/web-vue/es/icon';
 import { useProjectStore } from '../store';
+import type { RequestLog } from '../types';
 
 const route = useRoute();
 const projectStore = useProjectStore();
@@ -113,6 +136,49 @@ function getLogColor(status: number) {
   if (status >= 200 && status < 300) return 'green';
   if (status >= 400) return 'red';
   return 'blue';
+}
+
+function isMatched(log: RequestLog) {
+  // 兼容新字段上线前的旧日志
+  return log.matchSource ? log.matchSource !== 'none' : !!log.apiId;
+}
+
+function getMatchLabel(log: RequestLog) {
+  if (!isMatched(log)) return '未命中';
+  if (log.matchSource === 'condition') return '条件命中';
+  return '默认响应';
+}
+
+function getMatchColor(log: RequestLog) {
+  if (!isMatched(log)) return 'red';
+  if (log.matchSource === 'condition') return 'arcoblue';
+  return 'green';
+}
+
+function formatApiLabel(log: RequestLog) {
+  const method = log.apiMethod || log.method;
+  const name = log.apiName ? `${log.apiName} · ` : '';
+  const path = log.apiPath || log.path;
+  return `${name}${method} ${path}`;
+}
+
+function getMatchDetail(log: RequestLog) {
+  if (!isMatched(log)) {
+    return {
+      matched: false,
+      reason: '没有启用的接口匹配该路径和方法（停用的接口不参与匹配）'
+    };
+  }
+  return {
+    matched: true,
+    apiId: log.apiId,
+    apiName: log.apiName || '',
+    api: `${log.apiMethod || log.method} ${log.apiPath || log.path}`,
+    priority: log.priority ?? 0,
+    matchSource: log.matchSource === 'condition' ? 'condition（条件规则）' : 'default（默认响应）',
+    matchedRuleId: log.matchedRuleId || '',
+    matchedRuleName: log.matchedRuleName || ''
+  };
 }
 
 function refreshLogs() {
@@ -173,6 +239,38 @@ onMounted(() => {
 .log-time {
   font-size: 12px;
   color: #86909c;
+}
+
+.log-match {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: #4e5969;
+}
+
+.log-miss {
+  color: #cb2634;
+}
+
+.match-icon {
+  font-size: 15px;
+}
+
+.match-hit {
+  color: #00b42a;
+}
+
+.match-priority {
+  margin-left: 4px;
+  font-size: 12px;
+  color: #86909c;
+}
+
+.match-source {
+  color: #165dff;
 }
 
 .log-section {
