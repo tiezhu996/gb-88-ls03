@@ -33,13 +33,25 @@ export interface IMockAPI {
   responseHeaders: Record<string, string>;
   delay: number;
   conditions: IConditionRule[];
+  priority: number;
+  enabled: boolean;
   createdAt?: Date;
+}
+
+export interface IMatchedCondition {
+  index: number;
+  field: string;
+  operator: string;
+  value: string;
 }
 
 export interface IRequestLog {
   _id?: string;
   projectId: string;
   apiId?: string;
+  matched: boolean;
+  matchedApiPath?: string;
+  matchedCondition?: IMatchedCondition | null;
   method: string;
   path: string;
   headers: Record<string, string>;

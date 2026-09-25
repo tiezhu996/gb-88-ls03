@@ -1,6 +1,16 @@
 import mongoose, { Schema } from 'mongoose';
 import { IRequestLog } from '../types';
 
+const MatchedConditionSchema: Schema = new Schema(
+  {
+    index: { type: Number, required: true },
+    field: { type: String, required: true },
+    operator: { type: String, required: true },
+    value: { type: String, required: true }
+  },
+  { _id: false }
+);
+
 const RequestLogSchema: Schema = new Schema({
   projectId: {
     type: Schema.Types.ObjectId,
@@ -10,6 +20,17 @@ const RequestLogSchema: Schema = new Schema({
   apiId: {
     type: Schema.Types.ObjectId,
     ref: 'MockAPI'
+  },
+  matched: {
+    type: Boolean,
+    default: false
+  },
+  matchedApiPath: {
+    type: String
+  },
+  matchedCondition: {
+    type: MatchedConditionSchema,
+    default: null
   },
   method: {
     type: String,

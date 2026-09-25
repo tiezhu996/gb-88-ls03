@@ -55,7 +55,9 @@ async function seed() {
       ]),
       responseHeaders: { 'Content-Type': 'application/json' },
       delay: 0,
-      conditions: []
+      conditions: [],
+      priority: 0,
+      enabled: true
     },
     {
       projectId: project._id,
@@ -71,7 +73,9 @@ async function seed() {
       }),
       responseHeaders: { 'Content-Type': 'application/json' },
       delay: 0,
-      conditions: []
+      conditions: [],
+      priority: 0,
+      enabled: true
     },
     {
       projectId: project._id,
@@ -87,7 +91,9 @@ async function seed() {
       }),
       responseHeaders: { 'Content-Type': 'application/json' },
       delay: 0,
-      conditions: []
+      conditions: [],
+      priority: 0,
+      enabled: true
     },
     {
       projectId: project._id,
@@ -101,7 +107,9 @@ async function seed() {
       }),
       responseHeaders: { 'Content-Type': 'application/json' },
       delay: 0,
-      conditions: []
+      conditions: [],
+      priority: 0,
+      enabled: true
     },
     {
       projectId: project._id,
@@ -111,7 +119,9 @@ async function seed() {
       responseBody: '',
       responseHeaders: {},
       delay: 0,
-      conditions: []
+      conditions: [],
+      priority: 0,
+      enabled: true
     }
   ]);
 
@@ -122,6 +132,9 @@ async function seed() {
     logs.push({
       projectId: project._id,
       apiId: apis[i % apis.length]._id,
+      matched: true,
+      matchedApiPath: apis[i % apis.length].path,
+      matchedCondition: null,
       method: apis[i % apis.length].method,
       path: apis[i % apis.length].path,
       headers: { 'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0' },

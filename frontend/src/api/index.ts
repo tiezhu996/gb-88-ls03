@@ -51,6 +51,8 @@ export const mockApiApi = {
     api.post<ApiResponse<MockAPI>>(`/projects/${projectId}/apis`, data),
   updateAPI: (projectId: string, id: string, data: Partial<MockAPI>) =>
     api.put<ApiResponse<MockAPI>>(`/projects/${projectId}/apis/${id}`, data),
+  toggleAPI: (projectId: string, id: string, enabled: boolean) =>
+    api.patch<ApiResponse<MockAPI>>(`/projects/${projectId}/apis/${id}/toggle`, { enabled }),
   deleteAPI: (projectId: string, id: string) => api.delete<ApiResponse<void>>(`/projects/${projectId}/apis/${id}`)
 };
 

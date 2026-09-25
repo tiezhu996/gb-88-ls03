@@ -37,8 +37,13 @@ export async function mockEngine(req: Request, res: Response, next: NextFunction
   const method = req.method;
 
   try {
-    const apis = await MockAPI.find({ projectId, method });
-    
+    // 仅启用中的接口参与匹配（enabled 缺省视为启用，兼容历史数据）；
+    // 优先级数字大的先命中，相同优先级按创建时间先建先命中
+    const apis = await MockAPI.find({ projectId, method, enabled: { $ne: false } }).sort({
+      priority: -1,
+      createdAt: 1
+    });
+
     let matchedApi = null;
     for (const api of apis) {
       if (matchPath(api.path, requestPath)) {
@@ -51,6 +56,8 @@ export async function mockEngine(req: Request, res: Response, next: NextFunction
     let statusCode = 404;
     let headers: Record<string, string> = {};
     let delay = 0;
+    let matchedCondition = null;
+    let matchedConditionIndex = -1;
 
     if (matchedApi) {
       statusCode = matchedApi.statusCode;
@@ -60,10 +67,11 @@ export async function mockEngine(req: Request, res: Response, next: NextFunction
         : { ...(rawHeaders as Record<string, string> | undefined) };
       delay = matchedApi.delay || 0;
 
-      let matchedCondition = null;
-      for (const condition of matchedApi.conditions) {
+      for (let i = 0; i < matchedApi.conditions.length; i++) {
+        const condition = matchedApi.conditions[i];
         if (checkCondition(condition, req.query as Record<string, string>, req.body, req.headers as Record<string, string>)) {
           matchedCondition = condition;
+          matchedConditionIndex = i;
           break;
         }
       }
@@ -85,6 +93,16 @@ export async function mockEngine(req: Request, res: Response, next: NextFunction
         await RequestLog.create({
           projectId,
           apiId: matchedApi?._id,
+          matched: !!matchedApi,
+          matchedApiPath: matchedApi?.path,
+          matchedCondition: matchedCondition
+            ? {
+                index: matchedConditionIndex,
+                field: matchedCondition.field,
+                operator: matchedCondition.operator,
+                value: matchedCondition.value
+              }
+            : null,
           method,
           path: requestPath,
           headers: req.headers,

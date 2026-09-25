@@ -49,12 +49,20 @@ const MockAPISchema: Schema = new Schema({
     type: [ConditionRuleSchema],
     default: []
   },
+  priority: {
+    type: Number,
+    default: 0
+  },
+  enabled: {
+    type: Boolean,
+    default: true
+  },
   createdAt: {
     type: Date,
     default: Date.now
   }
 });
 
-MockAPISchema.index({ projectId: 1, path: 1, method: 1 }, { unique: true });
+MockAPISchema.index({ projectId: 1, method: 1, enabled: 1, priority: -1 });
 
 export default mongoose.model<IMockAPI>('MockAPI', MockAPISchema);

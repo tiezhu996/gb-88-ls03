@@ -11,6 +11,15 @@
     <a-card :loading="projectStore.loading">
       <a-table :data="projectStore.apis" :pagination="false">
         <template #columns>
+          <a-table-column title="启用" data-index="enabled" width="80" align="center">
+            <template #cell="{ record }">
+              <a-switch
+                :model-value="record.enabled"
+                size="small"
+                @change="(value: string | number | boolean) => handleToggle(record, value)"
+              />
+            </template>
+          </a-table-column>
           <a-table-column title="方法" data-index="method" width="100">
             <template #cell="{ record }">
               <a-tag :color="getMethodColor(record.method)">{{ record.method }}</a-tag>
@@ -19,6 +28,13 @@
           <a-table-column title="路径" data-index="path">
             <template #cell="{ record }">
               <code>{{ record.path }}</code>
+            </template>
+          </a-table-column>
+          <a-table-column title="优先级" data-index="priority" width="90" align="center">
+            <template #cell="{ record }">
+              <a-tooltip content="数值越大越先命中，相同优先级先创建的先命中">
+                <a-tag :color="record.priority > 0 ? 'arcoblue' : undefined">{{ record.priority ?? 0 }}</a-tag>
+              </a-tooltip>
             </template>
           </a-table-column>
           <a-table-column title="状态码" data-index="statusCode" width="100">
@@ -88,9 +104,18 @@
         <a-form-item field="path" label="API 路径">
           <a-input v-model="apiForm.path" placeholder="/api/users/:id" />
         </a-form-item>
-        <a-form-item field="delay" label="响应延迟 (毫秒)">
-          <a-input-number v-model="apiForm.delay" :min="0" style="width: 200px" />
-        </a-form-item>
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item field="delay" label="响应延迟 (毫秒)">
+              <a-input-number v-model="apiForm.delay" :min="0" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item field="priority" label="优先级（数值越大越先命中）">
+              <a-input-number v-model="apiForm.priority" style="width: 100%" />
+            </a-form-item>
+          </a-col>
+        </a-row>
         <a-form-item field="responseBody" label="响应体 (JSON)">
           <MonacoEditor v-model="apiForm.responseBody" language="json" />
         </a-form-item>
@@ -158,6 +183,7 @@ const apiForm = ref({
   statusCode: 200,
   responseBody: '{}',
   delay: 0,
+  priority: 0,
   conditions: [] as any[]
 });
 
@@ -191,9 +217,22 @@ function handleEdit(api: MockAPI) {
     statusCode: api.statusCode,
     responseBody: api.responseBody,
     delay: api.delay,
+    priority: api.priority ?? 0,
     conditions: [...api.conditions]
   };
   showCreateModal.value = true;
+}
+
+async function handleToggle(api: MockAPI, value: string | number | boolean) {
+  const enabled = Boolean(value);
+  try {
+    const result = await projectStore.toggleAPI(projectId.value, api._id, enabled);
+    if (result.success) {
+      Message.success(enabled ? `已启用「${api.method} ${api.path}」` : `已停用「${api.method} ${api.path}」，不再参与匹配`);
+    }
+  } catch (error: any) {
+    Message.error(error.response?.data?.error || '操作失败');
+  }
 }
 
 async function handleSave() {
@@ -260,6 +299,7 @@ function resetForm() {
     statusCode: 200,
     responseBody: '{}',
     delay: 0,
+    priority: 0,
     conditions: []
   };
 }

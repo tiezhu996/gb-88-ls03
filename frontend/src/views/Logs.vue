@@ -30,6 +30,18 @@
               <a-tag :color="getStatusCodeColor(log.responseStatus)" size="small">
                 {{ log.responseStatus }}
               </a-tag>
+              <a-tooltip
+                v-if="log.matched && log.matchedCondition"
+                :content="`匹配条件：${log.matchedCondition.field} ${getOperatorLabel(log.matchedCondition.operator)} ${log.matchedCondition.value}`"
+              >
+                <a-tag color="arcoblue" size="small">
+                  命中 {{ log.matchedApiPath }} · 规则#{{ log.matchedCondition.index + 1 }}
+                </a-tag>
+              </a-tooltip>
+              <a-tag v-else-if="log.matched" color="arcoblue" size="small">
+                命中 {{ log.matchedApiPath }} · 默认响应
+              </a-tag>
+              <a-tag v-else color="gray" size="small">未命中</a-tag>
               <span class="log-time">{{ formatDate(log.createdAt) }}</span>
             </div>
             <a-collapse bordered>
@@ -107,6 +119,16 @@ function getStatusCodeColor(status: number) {
   if (status >= 300 && status < 400) return 'blue';
   if (status >= 400 && status < 500) return 'orange';
   return 'red';
+}
+
+function getOperatorLabel(operator: string) {
+  const labels: Record<string, string> = {
+    equals: '等于',
+    contains: '包含',
+    startsWith: '开头为',
+    endsWith: '结尾为'
+  };
+  return labels[operator] || operator;
 }
 
 function getLogColor(status: number) {

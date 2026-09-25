@@ -58,6 +58,13 @@ interface ProjectState {
   loading: boolean;
 }
 
+// 与 Mock 引擎命中顺序一致：优先级大的在前，相同优先级先创建的在前
+function sortApis(apis: MockAPI[]) {
+  apis.sort(
+    (a, b) => b.priority - a.priority || new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  );
+}
+
 export const useProjectStore = defineStore('project', {
   state: (): ProjectState => ({
     projects: [],
@@ -115,13 +122,26 @@ export const useProjectStore = defineStore('project', {
     async createAPI(projectId: string, data: Partial<MockAPI>) {
       const response = await mockApiApi.createAPI(projectId, data);
       if (response.data.success) {
-        this.apis.unshift(response.data.data!);
+        this.apis.push(response.data.data!);
+        sortApis(this.apis);
       }
       return response.data;
     },
 
     async updateAPI(projectId: string, id: string, data: Partial<MockAPI>) {
       const response = await mockApiApi.updateAPI(projectId, id, data);
+      if (response.data.success) {
+        const index = this.apis.findIndex((a) => a._id === id);
+        if (index !== -1) {
+          this.apis[index] = response.data.data!;
+          sortApis(this.apis);
+        }
+      }
+      return response.data;
+    },
+
+    async toggleAPI(projectId: string, id: string, enabled: boolean) {
+      const response = await mockApiApi.toggleAPI(projectId, id, enabled);
       if (response.data.success) {
         const index = this.apis.findIndex((a) => a._id === id);
         if (index !== -1) {

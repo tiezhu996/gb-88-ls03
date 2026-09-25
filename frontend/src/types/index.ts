@@ -31,13 +31,25 @@ export interface MockAPI {
   responseHeaders: Record<string, string>;
   delay: number;
   conditions: ConditionRule[];
+  priority: number;
+  enabled: boolean;
   createdAt: string;
+}
+
+export interface MatchedCondition {
+  index: number;
+  field: string;
+  operator: string;
+  value: string;
 }
 
 export interface RequestLog {
   _id: string;
   projectId: string;
   apiId?: string;
+  matched: boolean;
+  matchedApiPath?: string;
+  matchedCondition?: MatchedCondition | null;
   method: string;
   path: string;
   headers: Record<string, string>;
