@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: docker.m.daocloud.io/library/mongo:6-jammy
+    container_name: mock-mongodb
+    restart: always
+    ports:
+      - "2919:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password123
+      MONGO_INITDB_DATABASE: mock-api-db
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mock-backend
+    restart: always
+    ports:
+      - "3119:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - MONGODB_URI=mongodb://admin:password123@mongodb:27017/mock-api-db?authSource=admin
+      - JWT_SECRET=your-secret-key-change-in-production
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:3000/api/health', (res) => process.exit(res.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: mock-frontend
+    restart: always
+    ports:
+      - "8119:80"
+    depends_on:
+      - backend
+
+volumes:
+  mongodb_data:
+    name: mock-mongodb-data
